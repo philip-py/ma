@@ -19,7 +19,7 @@ def testdoc_base(testakteur):
 # afd test case
 @pytest.fixture(scope='session')
 def testdoc_afd(testakteur):
-    BASEDIR = config[os.environ.get('FLASK_CONFIG')].BASEDIR
+    BASEDIR = config[os.environ.get('FLASK_CONFIG')].DIR_MAIN
     with open(f'{BASEDIR}/tests/fixtures/afd.txt', "r", encoding='utf-8') as f:
         text = f.read()
     return(Doc(text=text, corpus='plenar', date=to_datetime('2018-01-01'), autor=testakteur))
@@ -37,7 +37,6 @@ def testdoc_tweet(testakteur):
 def app():
     if os.environ.get('FLASK_CONFIG') != 'testing':
         raise Exception("Wrong FLASK_CONFIG, should be 'testing'")
-    # BASEDIR = config[os.environ.get('FLASK_CONFIG')].BASEDIR
     app = create_app(os.getenv('FLASK_CONFIG') or 'testing')
     app.app_context().push()
     app.debug = True

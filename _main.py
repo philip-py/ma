@@ -19,6 +19,7 @@ from app.src.d01_ana.analysis import Config, Analysis
 from app.config import config
 from pandas import to_datetime
 
+# ADD TESTDOCS FIRST, DON'T FORGET TO ROLLBACK!
 
 # def testakteur():
     # return(Akteur(name='donald merkel', party='afd', id_party=42, agw_18='url1', agw_19='url2', agw_url='url3', byear=1950, gender='q', education='celeb', election_list='USA', facebook='www.fb.de', twitter=['https://twitter.com/realDonaldTrump'], youtube=None, instagram=None, flickr=None))

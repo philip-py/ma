@@ -146,9 +146,10 @@ class Analysis(AnalysisBase):
         self.logger.info(
             f"Beginning Content Analysis with parameters: \n {self.config.dict()}")
         self.is_test = os.getenv('FLASK_CONFIG') == 'testing'
-        self.is_res = "res" in self.nlp.pipeline
-        if self.is_res:
-            res = self.get_results()
+        self.is_res = True
+        # self.is_res = "res" in self.nlp.pipeline
+        # if self.is_res:
+        res = self.get_results()
 
         if to_disk:
             self.config.write_bin = True
@@ -163,8 +164,8 @@ class Analysis(AnalysisBase):
 
         # for document in tqdm(self.doc_labels):
         for document in (self.doc_labels if self.config.debug else tqdm(self.doc_labels)):
-            if self.is_res:
-                res.labels.append(document.id)
+            # if self.is_res:
+            res.labels.append(document.id)
             if self.input:
                 doc = self.nlp(self.input)
                 if self.config.debug:
