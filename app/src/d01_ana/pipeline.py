@@ -22,28 +22,84 @@ from gensim.models import tfidfmodel
 
 from .results import Results, Viz
 
-
-class Spans(object):
-    """DOCSTRING"""
-    name = "spans"
+class Start(object):
+    """Initialize CA"""
+    name = "start"
 
     def __init__(self, nlp):
         self.nlp = nlp
-        self.results = self.nlp.pipeline[-1][1].results
-        self.results.spans = []
-        self.index = 0
+        self.results = Results()
 
     def __call__(self, doc):
-        spans = []
-        for hit in self.results.viz[self.index]:
-            span_start = hit.span_start
-            span_end = hit.span_end
-            span_id = (span_start, span_end)
-            if span_id not in spans:
-                spans.append(span_id)
-        self.results.spans.append(spans)
+        return doc
+
+
+class CustomExtensions(object):
+
+    name = 'custom_extensions'
+
+    def __init__(self, nlp, doc_labels):
+        self.nlp = nlp
+        # self.results = self.nlp.pipeline[-1][1].results
+        self.lemmatizer = GermaLemma()
+        self.negation_words = set(["nie", "keinsterweise", "keinerweise", "niemals", "nichts", "kaum", "keinesfalls", "ebensowenig", "nicht", "kein", "keine", "weder"])
+        self.negation_cconj = set(['aber', 'jedoch', 'doch', 'sondern'])
+        self.data = dict()
+        self.data['nw'] = list(self.negation_words)
+        self.data['nc'] = list(self.negation_cconj)
+        self.doc_labels = doc_labels
+        self.index = 0
+
+
+    def __call__(self, doc):
+        Token.set_extension("lemma", getter=self.lemma_getter, force=True)
+        Token.set_extension("is_negation", getter=self.is_negation_getter, force=True)
+        Token.set_extension("is_sentence_break", getter=self.is_sentence_break_getter, force=True)
+
+        doc.user_data = {'label': self.doc_labels[self.index]}
+
+        # for token in doc:
+            # pass
         self.index += 1
         return doc
+
+    def to_disk(self, path, **kwargs):
+        # This will receive the directory path + /my_component
+        path.mkdir(parents=True, exist_ok=True)
+        data_path = path / "data.json"
+        with data_path.open("w", encoding="utf8") as f:
+            f.write(json.dumps(self.data))
+
+    def from_disk(self, path, **cfg):
+        # This will receive the directory path + /my_component
+        data_path = path / "data.json"
+        with data_path.open("r", encoding="utf8") as f:
+            self.data = json.loads(f)
+        self.negation_words = self.data['nw']
+        self.negation_cconj = self.data['nc']
+        return self
+
+
+    def lemma_getter(self, token):
+        # if " " in token.text:
+        #     return token.lemma_.lower()
+        try:
+            return self.lemmatizer.find_lemma(token.text, token.tag_).lower()
+        except:
+            return token.lemma_.lower()
+
+    def is_negation_getter(self, token):
+        if token._.lemma in self.negation_words:
+            return True
+        else:
+            return False
+
+    def is_sentence_break_getter(self, token):
+        if token._.lemma in self.negation_cconj:
+            return True
+        else:
+            return False
+
 
 
 class SentimentRecognizer(object):
@@ -575,69 +631,28 @@ class ContentAnalysis(object):
         return viz
 
 
-class CustomExtensions(object):
+class Spans(object):
+    """DOCSTRING"""
+    name = "spans"
 
-    name = 'custom_extensions'
-
-    def __init__(self, nlp, doc_labels):
-        self.lemmatizer = GermaLemma()
-        self.negation_words = set(["nie", "keinsterweise", "keinerweise", "niemals", "nichts", "kaum", "keinesfalls", "ebensowenig", "nicht", "kein", "keine", "weder"])
-        self.negation_cconj = set(['aber', 'jedoch', 'doch', 'sondern'])
-        self.data = dict()
-        self.data['nw'] = list(self.negation_words)
-        self.data['nc'] = list(self.negation_cconj)
-        self.doc_labels = doc_labels
+    def __init__(self, nlp):
+        self.nlp = nlp
+        self.results = self.nlp.pipeline[-1][1].results
+        self.results.spans = []
         self.index = 0
 
-
     def __call__(self, doc):
-        Token.set_extension("lemma", getter=self.lemma_getter, force=True)
-        Token.set_extension("is_negation", getter=self.is_negation_getter, force=True)
-        Token.set_extension("is_sentence_break", getter=self.is_sentence_break_getter, force=True)
-
-        doc.user_data = {'label': self.doc_labels[self.index]}
-
-        # for token in doc:
-            # pass
+        spans = []
+        for hit in self.results.viz[self.index]:
+            span_start = hit.span_start
+            span_end = hit.span_end
+            span_id = (span_start, span_end)
+            if span_id not in spans:
+                spans.append(span_id)
+        self.results.spans.append(spans)
         self.index += 1
         return doc
 
-    def to_disk(self, path, **kwargs):
-        # This will receive the directory path + /my_component
-        path.mkdir(parents=True, exist_ok=True)
-        data_path = path / "data.json"
-        with data_path.open("w", encoding="utf8") as f:
-            f.write(json.dumps(self.data))
-
-    def from_disk(self, path, **cfg):
-        # This will receive the directory path + /my_component
-        data_path = path / "data.json"
-        with data_path.open("r", encoding="utf8") as f:
-            self.data = json.loads(f)
-        self.negation_words = self.data['nw']
-        self.negation_cconj = self.data['nc']
-        return self
-
-
-    def lemma_getter(self, token):
-        # if " " in token.text:
-        #     return token.lemma_.lower()
-        try:
-            return self.lemmatizer.find_lemma(token.text, token.tag_).lower()
-        except:
-            return token.lemma_.lower()
-
-    def is_negation_getter(self, token):
-        if token._.lemma in self.negation_words:
-            return True
-        else:
-            return False
-
-    def is_sentence_break_getter(self, token):
-        if token._.lemma in self.negation_cconj:
-            return True
-        else:
-            return False
 
 def gendocs(label):
     with open("data/corpus_clean/{}.txt".format(label), "r") as text_file:

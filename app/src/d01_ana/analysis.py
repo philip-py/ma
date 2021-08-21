@@ -118,6 +118,8 @@ class Analysis(AnalysisBase):
     def build_pipeline(self, pipe: List[str]) -> None:
         """Initiate Pipeline-Elements and add them to nlp"""
         self.nlp.remove_pipe("ner")
+        # start = Start(self.nlp)
+        # self.nlp.add_pipe(start, last=True)
         if 'extensions' in pipe:
             extensions = CustomExtensions(self.nlp, self.doc_labels)
             self.nlp.add_pipe(extensions, last=True)

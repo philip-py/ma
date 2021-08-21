@@ -4,6 +4,20 @@ from app.models import Doc
 import pytest
 
 @pytest.fixture(scope='module')
+def ca_extensions(test_app):
+    settings_analysis = {
+    'debug': False,
+    'sample': None,
+    'clf_model': 'joeddav/xlm-roberta-large-xnli',
+    # 'corpus': ['plenar'],
+    'pipeline': ['extensions']
+    }
+
+    content_analysis = Analysis('test', Config(**settings_analysis))
+    content_analysis(to_disk=False, to_db=True)
+
+
+@pytest.fixture(scope='module')
 def content_analysis(test_app):
     settings_analysis = {
     'debug': False,
@@ -36,6 +50,9 @@ def content_analysis(test_app):
     # res.compute_score_spans()
 
     # run tests
+
+def test_extensions(ca_extensions):
+    assert content_analysis.results != None
 
 def test_labels(content_analysis):
     assert content_analysis.labels == [1, 2, 3, 4]
