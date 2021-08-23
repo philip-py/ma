@@ -31,6 +31,9 @@ class Start(object):
         self.results = Results()
 
     def __call__(self, doc):
+        # calculate doclength
+        doclen = len(doc)
+        self.results.doclens.append(doclen)
         return doc
 
 
@@ -40,7 +43,7 @@ class CustomExtensions(object):
 
     def __init__(self, nlp, doc_labels):
         self.nlp = nlp
-        # self.results = self.nlp.pipeline[-1][1].results
+        self.results = self.nlp.pipeline[-1][1].results
         self.lemmatizer = GermaLemma()
         self.negation_words = set(["nie", "keinsterweise", "keinerweise", "niemals", "nichts", "kaum", "keinesfalls", "ebensowenig", "nicht", "kein", "keine", "weder"])
         self.negation_cconj = set(['aber', 'jedoch', 'doch', 'sondern'])
@@ -58,10 +61,29 @@ class CustomExtensions(object):
 
         doc.user_data = {'label': self.doc_labels[self.index]}
 
-        # for token in doc:
-            # pass
+        if os.environ.get('FLASK_CONFIG') == 'testing':
+            res = {
+                "viz": [],
+            }
+            for token in doc:
+                if token._.is_negation:
+                    res['viz'].append(self.on_hit(token))
+                        # if token._.is_attr and token.i not in token_ids:
+                        #     res["elite_attr"].append(token._.lemma)
+                        #     res['viz'].append(self.on_hit(token, 'EA', doc[span.start], doc[span.end-1]))
+                        #     token_ids.add((token.i, "EA"))
+            self.results.viz.append([i for i in res['viz']])
+
         self.index += 1
         return doc
+
+    def on_hit(self, token):
+        start = token.idx
+        # end = token.idx + len(token.text) + 1
+        end = token.idx + len(token.text)
+        lemma = token._.lemma
+        res = {"start": start, "end": end, "lemma": lemma, "pos": token.pos_, "dep" : token.dep_, "index": token.i, 'negation': token._.is_negation, 'text': token.text}
+        return res
 
     def to_disk(self, path, **kwargs):
         # This will receive the directory path + /my_component
@@ -107,6 +129,8 @@ class SentimentRecognizer(object):
     name = "sentiment_recognizer"
 
     def __init__(self, nlp):
+        self.nlp = nlp
+        self.results = Results()
         self.load_dicts()
         # Token.set_extension('is_neg', default=False, force=True)
         # Token.set_extension('is_pos', default=False, force=True)
@@ -205,6 +229,8 @@ class EntityRecognizer(object):
     name = "entity_recognizer"
 
     def __init__(self, nlp):
+        self.nlp = nlp
+        self.results = Results()
         self.load_dicts()
         self.ruler = EntityRuler(nlp, overwrite_ents=True, phrase_matcher_attr="LOWER")
         self.vocab = nlp.vocab
@@ -415,6 +441,7 @@ class ContentAnalysis(object):
         # self.dictionary = None
         # Results()
         # self.res = []
+        # self.results = Results()
         self.results = Results()
         self.window_size = window_size
 

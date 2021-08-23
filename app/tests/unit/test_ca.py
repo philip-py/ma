@@ -16,6 +16,11 @@ def ca_extensions(test_app):
     content_analysis = Analysis('test', Config(**settings_analysis))
     content_analysis(to_disk=False, to_db=True)
 
+    res = content_analysis.get_results()
+    # res.prepare()
+    return res
+
+
 
 @pytest.fixture(scope='module')
 def content_analysis(test_app):
@@ -24,7 +29,7 @@ def content_analysis(test_app):
     'sample': None,
     'clf_model': 'joeddav/xlm-roberta-large-xnli',
     # 'corpus': ['plenar'],
-    'pipeline': ['extensions', 'sentiment', 'entity', 'res', 'spans']
+    'pipeline': ['extensions', 'sentiment', 'entity', 'res']
     #     'pipeline': ['extensions', 'sentiment', 'entity', 'res', 'spans', 'clf']
     }
 
@@ -52,7 +57,8 @@ def content_analysis(test_app):
     # run tests
 
 def test_extensions(ca_extensions):
-    assert content_analysis.results != None
+    assert ca_extensions.doclens == [30, 7, 708, 4]
+    # assert ca_extensions.viz == []
 
 def test_labels(content_analysis):
     assert content_analysis.labels == [1, 2, 3, 4]

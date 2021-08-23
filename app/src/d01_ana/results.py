@@ -215,9 +215,9 @@ class Results:
         self.coding_pop()
         self.compute_score(by_doclen=False, idf_weight=1.5,
                            doclen_log=10, post=post)
-        # self.compute_score_spans()
+        self.compute_score_spans()
         # self.create_spans()
-        # self.create_df()
+        self.create_df()
 
     def render_online(text, row=None, viz=None, span=None, filter_by=['score'], pres=False):
         """visualize documents with displacy"""
@@ -317,7 +317,7 @@ class Results:
         displacy.render(ex, style="ent", manual=True, jupyter=True, options=options)
 
 
-    def visualize(self, label, span=None, filter_by=False, pres=False, online=False):
+    def visualize_jupyter(self, label, span=None, filter_by=False, pres=False, online=False):
         if " " in label:
             row = None
             text = label
@@ -326,8 +326,9 @@ class Results:
             row = self.df.loc[self.df['doc'] == label]
             text = gendocs(label)
             viz = copy.deepcopy(self.viz[self.labels.index(label)])
-        Results.render(text, row, viz, span=span,
+        ex, options = Results.render(text, row, viz, span=span,
                        filter_by=filter_by, pres=pres, online=online)
+        displacy.render(ex, style="ent", manual=True, jupyter=True, options=options)
 
     @staticmethod
     def render(text, row, viz, span=None, filter_by=['score'], pres=False, online=False):
@@ -337,21 +338,25 @@ class Results:
             viz = [i for i in viz if i[condition]]
             return viz
 
+        viz = [i.dict() for i in viz]
         viz = Results.filter_viz(viz, on='start')
         viz = filter_spans_overlap(viz)
         viz_span = []
 
-        if span:
-            span = span
-        else:
-            span = (0, len(text) + 1)
+        # if span:
+            # span = span
+        # else:
+        span = (0, len(text) + 1)
+
+        print(span)
 
         if pres:
             viz_span_ = []
             for hit in viz:
                 paragraph = {}
-                hit['start'] -= span[0]
-                hit['end'] -= span[0]
+                # print(span)
+                # hit['start'] -= span[0]
+                # hit['end'] -= span[0]
                 paragraph['start'] = hit['span_start']
                 paragraph['end'] = hit['span_end']
                 # hit['label'] = f"{hit['coding']} | {hit['score']:.2f}"

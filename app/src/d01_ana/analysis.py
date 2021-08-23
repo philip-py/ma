@@ -110,6 +110,7 @@ class Analysis(AnalysisBase):
     def __init__(self, dir, config):
         super().__init__(dir, config)
         self.nlp = spacy.load(config.nlp_model)
+        self.config = config
         self.build_pipeline(config.pipeline)
         self.logger.info(f'init {self.__class__.__name__}\n')
         if config.debug:
@@ -118,16 +119,16 @@ class Analysis(AnalysisBase):
     def build_pipeline(self, pipe: List[str]) -> None:
         """Initiate Pipeline-Elements and add them to nlp"""
         self.nlp.remove_pipe("ner")
-        # start = Start(self.nlp)
-        # self.nlp.add_pipe(start, last=True)
+        start = Start(self.nlp)
+        self.nlp.add_pipe(start, last=True)
         if 'extensions' in pipe:
             extensions = CustomExtensions(self.nlp, self.doc_labels)
             self.nlp.add_pipe(extensions, last=True)
         if 'sentiment' in pipe:
             sentiment = SentimentRecognizer(self.nlp)
             sentiws = spaCySentiWS(sentiws_path=f"{config[os.getenv('FLASK_CONFIG')].DIR_DATA}/sentiws/")
-            self.nlp.add_pipe(sentiment, last=True)
             self.nlp.add_pipe(sentiws, last=True)
+            self.nlp.add_pipe(sentiment, last=True)
         if 'entity' in pipe:
             entity = EntityRecognizer(self.nlp)
             self.nlp.add_pipe(entity, last=True)
@@ -148,9 +149,8 @@ class Analysis(AnalysisBase):
         self.logger.info(
             f"Beginning Content Analysis with parameters: \n {self.config.dict()}")
         self.is_test = os.getenv('FLASK_CONFIG') == 'testing'
-        self.is_res = True
-        # self.is_res = "res" in self.nlp.pipeline
-        # if self.is_res:
+        self.is_res = "res" in self.config.pipeline
+        # self.is_res = True
         res = self.get_results()
 
         if to_disk:

@@ -70,3 +70,14 @@ def test_app(app, testakteur, testdoc_base, testdoc_ger_pos, testdoc_afd, testdo
     db.session.rollback()
     db.session.close()
 
+@pytest.fixture(scope='module')
+def test_app_real_case(app, testakteur, testdoc_afd):
+    db.create_all()
+
+    test_cases = [testakteur, testdoc_afd]
+
+    db.session.add_all(test_cases)
+    yield app.test_client()
+    db.session.rollback()
+    db.session.close()
+

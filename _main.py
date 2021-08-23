@@ -36,8 +36,10 @@ def testdoc_afd():
 test_cases = [testdoc_afd()]
 db.session.add_all(test_cases)
 
+#%%
 docs = db.session.query(Akteur).filter_by(name='donald trump').first()
 
+#%%
 settings_analysis = {
 'debug': False,
 'sample': [docs.docs[-1]],
@@ -47,18 +49,13 @@ settings_analysis = {
 # 'pipeline': ['extensions', 'sentiment', 'entity', 'res']
 #     'pipeline': ['extensions', 'sentiment', 'entity', 'res', 'spans', 'clf']
 }
+for i in range(100):
+    content_analysis = Analysis('test', Config(**settings_analysis))
+    content_analysis(to_disk=False, to_db=False)
 
-content_analysis = Analysis('test', Config(**settings_analysis))
-content_analysis(to_disk=False, to_db=False)
+    # res = content_analysis.get_results()
+    # print(res.viz[-1])
 
-res = content_analysis.get_results()
-print(res.viz[-1])
-
-#%%
-db.session.rollback()
-db.session.close()
-
-#%%
     res = content_analysis.get_results()
     # print(res)
 
@@ -71,7 +68,13 @@ db.session.close()
     # res.create_df()
     # res.compute_score_spans()
     print(res.top_spans()[0])
-    print(res.viz[2][0])
+    print(res.viz[0][0])
+
+#%%
+db.session.rollback()
+db.session.close()
+
+#%%
 
 #%%
 docs.docs[0].res
@@ -108,14 +111,15 @@ BASEDIR = config[os.environ.get('FLASK_CONFIG')].DIR_MAIN
 
 # create test_case
 test_akteur = Akteur(name='donald trump', party='afd', id_party=42, agw_18='url1', agw_19='url2', agw_url='url3', byear=1950, gender='q', education='celeb', election_list='USA', facebook='www.fb.de', twitter=['https://twitter.com/realDonaldTrump'], youtube=None, instagram=None, flickr=None)
-test_doc = Document(text='Wir sind das Volk . Merkel ist korrupt . Politiker sind nicht schlecht . Die Regierung betrügt die deutschen Menschen am 25. Mai . http://www.twitter.com #%*(@', date=to_datetime('2018-01-01'), autor=test_akteur)
-test_cases = [test_akteur, test_doc]
+# test_doc = Document(text='Wir sind das Volk . Merkel ist korrupt . Politiker sind nicht schlecht . Die Regierung betrügt die deutschen Menschen am 25. Mai . http://www.twitter.com #%*(@', date=to_datetime('2018-01-01'), autor=test_akteur)
+# test_cases = [test_akteur, test_doc]
+test_cases = [test_akteur]
 
 # add specific test-cases:
-tdoc_ger_pos = Document(text='In Deutschland ist es sehr schön .', date=to_datetime('2018-01-01'), autor=test_akteur)
+# tdoc_ger_pos = Document(text='In Deutschland ist es sehr schön .', date=to_datetime('2018-01-01'), autor=test_akteur)
 tdoc_afd = Document(text=load_test_case(BASEDIR), date=to_datetime('2018-01-01'), autor=test_akteur)
 test_cases.extend([
-    tdoc_ger_pos, tdoc_afd
+    tdoc_afd
 ])
 
 # commit to db
