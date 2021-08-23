@@ -7,6 +7,21 @@ from pprint import pprint
 import string
 import pickle
 from tqdm import tqdm
+from app import create_app, db
+from app.models import Doc as Document
+from app.models import Akteur
+from app.src.d00_utils.helper import (filter_spans_overlap, filter_viz)
+from sqlalchemy.sql import text
+from app.src.d01_ana.diskurs import MyCorpus, doc_gen
+from sqlalchemy import and_
+from tqdm import tqdm
+from collections import defaultdict
+import numpy as np
+import pandas as pd
+from random import sample
+import pickle
+import spacy
+from spacy.tokens import Doc, Span, Token
 
 abks = ['a.a.O.',
  'Abb.',
@@ -288,6 +303,188 @@ def clean_name_res(dfp):
     dfp = dfp.rename(columns={"speaker_cleaned": "name_res"})
 
     return dfp
+
+
+# %%
+
+
+#%%
+def create_all_lookups():
+    dir = 'res/beta/lookups'
+    token2doc = defaultdict(list)
+    doc2freq = defaultdict(lambda: defaultdict(int))
+    freq = defaultdict(int)
+    akteur2freq = defaultdict(lambda: defaultdict(int))
+    aggregates = defaultdict(lambda: defaultdict(int))
+
+    q = Document.query.filter(Document.corpus.like('plenar')).all()
+    print('Number of Documents: ', len(q))
+    # q = sample(q, 1000)
+    docs = MyCorpus(q)
+
+    for doc, label in zip(doc_gen(q), tqdm(q)):
+        for token in doc:
+            token2doc[token].append(label)
+            doc2freq[label][token] += 1
+            freq[token] += 1
+            akteur2freq[label.autor.name][token] += 1
+            aggregates[label.autor.party][token] += 1
+            aggregates[label.autor.name][token] += 1
+            aggregates[label.autor.party]['_sum'] +=1
+            aggregates[label.autor.name]['_sum'] += 1
+
+    with open(f'{dir}/t2d.pkl', 'wb') as handle:
+        pickle.dump(dict(token2doc), handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+    with open(f'{dir}/d2f.pkl', 'wb') as handle:
+        pickle.dump(dict(doc2freq), handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+    with open(f'{dir}/freq.pkl', 'wb') as handle:
+        pickle.dump(dict(freq), handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+    with open(f'{dir}/a2f.pkl', 'wb') as handle:
+        pickle.dump(dict(akteur2freq), handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+    with open(f'{dir}/agg.pkl', 'wb') as handle:
+        pickle.dump(dict(aggregates), handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+#%%
+# create_all_lookups()
+
+#%%
+# dir = 'beta'
+# agggregates = pd.read_pickle(f'res/{dir}/lookups/agg.pkl')
+# token2doc = pd.read_pickle(f'res/{dir}/lookups/t2d.pkl')
+# doc2freq = pd.read_pickle(f'res/{dir}/lookups/d2f.pkl')
+# freq = pd.read_pickle(f'res/{dir}/lookups/freq.pkl')
+# akteur2freq = pd.read_pickle(f'res/{dir}/lookups/a2f.pkl')
+
+#%%
+# create co-occurrence matrix
+def __co_occurrence(sentences, total_len, window_size):
+    d = defaultdict(int)
+    vocab = set()
+    freq = defaultdict(int)
+    for text in tqdm(sentences, total=total_len):
+        # preprocessing (use tokenizer instead)
+        # text = text.lower().split()
+        # iterate over sentences
+        for i in range(len(text)):
+            token = text[i]
+            vocab.add(token)  # add to vocab
+            freq[token] += 1
+            start = i-window_size
+            end = i+1+window_size
+            if start < 0:
+                start = 0
+            if end > len(text) + 1:
+                end = len(text) + 1
+            next_token = text[start : end]
+            next_token.remove(token)
+            # print(token, next_token)
+            for t in next_token:
+                key = tuple(sorted([t, token]))
+                d[key] += 1
+
+    for k, v in freq.items():
+        if v <= 5:
+            vocab.remove(k)
+            for key in list(d.keys()):
+                if k in key:
+                    del d[key]
+    del freq
+
+
+    # dictionary into dataframe
+    vocab = sorted(vocab) # sort vocab
+    df = pd.DataFrame(data=np.zeros((len(vocab), len(vocab)), dtype=np.int16),
+                      index=vocab,
+                      columns=vocab)
+    for key, value in tqdm(d.items()):
+        df.at[key[0], key[1]] = value
+        df.at[key[1], key[0]] = value
+    return df
+
+def create_cooccurrence_per_party(dir):
+    for party in db.session.execute(
+    "SELECT DISTINCT party FROM akteure"
+    ):
+        party = party[0]
+        print(party)
+        q = Document.query.filter(and_(Document.autor.has(Akteur.party == party), Document.corpus.like('plenar'))).all()
+        # q = sample(q, 10)
+        docs = MyCorpus(q)
+        vocab, coo = create_cooccurrence_matrix(dir, docs, 5)
+        id = {v: k for k, v in vocab.items()}
+
+        with open(f'res/{dir}/coo/coo_{party}.pkl', 'wb') as handle:
+            pickle.dump(coo, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+        with open(f'res/{dir}/coo/vocab_{party}.pkl', 'wb') as handle:
+            pickle.dump(vocab, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+        with open(f'res/{dir}/coo/id_{party}.pkl', 'wb') as handle:
+            pickle.dump(id, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+#%%
+# coo.loc['islam'].sort_values(ascending=False)[:20]
+
+#%%
+# better alternative
+from scipy.sparse import coo_matrix
+
+def create_cooccurrence_matrix(docs, window_size):
+    vocabulary={}
+    data=[]
+    row=[]
+    col=[]
+
+    # for tokens in docs:
+    #     for pos,token in enumerate(tokens):
+
+    #new from here:
+    for doc in docs:
+        tokens = pipe(doc)
+        for pos, token in enumerate(tokens):
+            i=vocabulary.setdefault(token,len(vocabulary))
+            start=max(0,pos-window_size)
+            end=min(len(tokens),pos+window_size+1)
+            for pos2 in range(start,end):
+                if pos2==pos:
+                    continue
+                j=vocabulary.setdefault(tokens[pos2],len(vocabulary))
+                data.append(1.); row.append(i); col.append(j);
+    cooccurrence_matrix=coo_matrix((data,(row,col)))
+    return vocabulary,cooccurrence_matrix
+
+
+# use pipe to generate tokens from docs
+from germalemma import GermaLemma
+
+def pipe(label):
+    lemmatizer = GermaLemma()
+
+    # from src.d01_ana.analysis import load_data, gendocs
+    def lemma_getter(token):
+        try:
+            return lemmatizer.find_lemma(token.text, token.tag_).lower()
+        except:
+            return token.lemma_.lower()
+
+    nlp = spacy.load("de_core_news_lg")
+    doc = nlp(label.text)
+    res = []
+
+    for i, sent in enumerate(doc.sents):
+        for j, token in enumerate(sent):
+            Token.set_extension('lemma', getter=lemma_getter, force=True)
+            if not token.is_punct and not token.is_digit and not token.is_space:
+                tok = token._.lemma.lower()
+                tok = tok.replace('.', '')
+                res.append(tok)
+
+    return res
 
 # def clean_corpus(text_gen):
 #     def remove_URL(sample):
