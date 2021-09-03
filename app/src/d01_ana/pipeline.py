@@ -228,12 +228,18 @@ class EntityRecognizer(object):
 
     name = "entity_recognizer"
 
-    def __init__(self, nlp):
+    def __init__(self, nlp, config_ca):
         self.nlp = nlp
         self.results = Results()
         self.load_dicts()
         self.ruler = EntityRuler(nlp, overwrite_ents=True, phrase_matcher_attr="LOWER")
         self.vocab = nlp.vocab
+        self.config = config_ca
+        self.debug = False
+        if self.config.debug:
+            self.debug = True
+
+        
         patterns = []
         for term in self.dict_people:
             patterns.append({"label": "PEOPLE", "pattern": [{"_": {"lemma": term}}]})
@@ -382,6 +388,9 @@ class EntityRecognizer(object):
                     if not token._.is_negated:
                         token._.set("is_elite_neg", True)
             doc.ents = list(doc.ents) + [entity]
+            
+        if self.debug:
+            print(doc.ents)
         # nach content analyse?
         # for span in filtered:
         # span.merge()
@@ -435,8 +444,12 @@ class ContentAnalysis(object):
     """Runs Content Analysis as spacy-pipeline-component"""
     name = "content_analysis"
 
-    def __init__(self, nlp, window_size=25):
+    def __init__(self, nlp, config_ca, window_size=25):
         self.nlp = nlp
+        self.config = config_ca
+        self.debug = False
+        if self.config.debug:
+            self.debug = True
         self.dictionary = pickle.load(open(f"{config[os.getenv('FLASK_CONFIG')].DIR_DATA}/plenar_dict.pkl", "rb"))
         # self.dictionary = None
         # Results()
@@ -444,6 +457,7 @@ class ContentAnalysis(object):
         # self.results = Results()
         self.results = Results()
         self.window_size = window_size
+
 
         Span.set_extension(
             "has_elite_neg", getter=self.has_elite_neg_getter, force=True
@@ -465,7 +479,7 @@ class ContentAnalysis(object):
         window_size = self.window_size
         # idf_weight = 1.0
         ##########################################
-
+        
         # matcher cant find shit without is_elite_neg from entity recognizer!
         matcher = Matcher(self.nlp.vocab)
         pattern = [{"_": {"is_elite_neg": True}}]
@@ -500,7 +514,7 @@ class ContentAnalysis(object):
 
         # CAREFUL!!!!!
         spans = filter_spans_overlap_no_merge(spans)
-        print(spans)
+#         print(spans)
         for span in spans:
             span = doc[span['span_start'] : span['span_end']]
             if span._.has_elite_neg and span._.has_volk:
@@ -545,6 +559,8 @@ class ContentAnalysis(object):
         # res['doclen'] = doclen
         self.results.doclens.append(doclen)
         self.results.viz.append([Viz(**i) for i in res['viz']])
+        if self.debug:
+            print(self.results.viz)
 #         self.results.prepare()
         # self.res.append(res)
         return doc

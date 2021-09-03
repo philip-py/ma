@@ -27,7 +27,7 @@ class Word(db.Model):
 class Doc(db.Model):
     __tablename__ = 'docs'
     id = db.Column(db.Integer, primary_key=True)
-    # filename = db.Column(db.String(64), unique=True)
+    filename = db.Column(db.String(64), unique=True)
     text = db.Column(db.Text)
     date = db.Column(db.Date)
     corpus = db.Column(db.String(64))

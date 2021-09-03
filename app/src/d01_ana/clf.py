@@ -1,4 +1,4 @@
-# from transformers import pipeline
+from transformers import pipeline
 from pprint import pprint
 from app import db
 from app.models import Doc as Document
@@ -27,6 +27,7 @@ class Clf(object):
         self.clf_ger(doc, debug=debug)
         self.clf_pop(doc, debug=debug)
         self.clf_demo(doc, debug=debug)
+        self.clf_nazis(doc, debug=debug)
         self.iterate()
 
         return doc
@@ -56,9 +57,10 @@ class Clf(object):
             hypothesis_template = 'Der Text handelt von {}'
             candidate_labels = ['Deutschland', 'Europa', 'Ausland']
             s = self.clf(text, candidate_labels, hypothesis_template, multi_class=True)
-            # if s['labels'][0] == 'Ausland' and s['scores'][0] > 0.5:
             id_ausland = s['labels'].index('Ausland')
+            id_europa = s['labels'].index('Europa')
             id_ger = s['labels'].index('Deutschland')
+            
             if s['labels'][-1] == 'Deutschland' and s['scores'][id_ausland] > 0.5:
                 for v in viz:
                     v.GER = False
@@ -66,8 +68,30 @@ class Clf(object):
             elif s['labels'][0] == 'Ausland' and s['scores'][id_ausland] / s['scores'][id_ger] >  2:
                 for v in viz:
                     v.GER = False
+            
+            elif s['labels'][0] == 'Europa' and s['scores'][id_europa] < 0.8 and id_ger == 2:
+                for v in viz:
+                    v.GER = False
+                    
+            if self.config.debug:
+                pprint(span_id)
+                pprint(hypothesis_template)
+                pprint(s)
+                    
+            # 2. check for relevant ausland
+            hypothesis_template = 'Der Text handelt von {}'
+            relevant_ausland = ['Türkei', 'Russland', 'Afghanistan', 'Syrien', 'Polen', 'Mali', 'Großbritannien', 'Frankreich', 'Österreich']
+#             id_türkei = s['labels'].index('Türkei')
+#             id_russland = s['labels'].index('Russland')
+            candidate_labels = relevant_ausland
+            candidate_labels.append('Deutschland')
+            s = self.clf(text, candidate_labels, hypothesis_template, multi_class=True)
+            if s['labels'][0] in relevant_ausland and s['scores'][0] > 0.9:
+                for v in viz:
+                    v.GER = False
 
             if self.config.debug:
+#                 print(id_ausland, id_europa, id_ger)
                 pprint(span_id)
                 pprint(hypothesis_template)
                 pprint(s)
@@ -165,6 +189,33 @@ class Clf(object):
                         condition=True
             res_viz.extend(viz)
         self.results.viz[self.index] = res_viz
+        
+        
+    def clf_nazis(self, doc, debug=False):
+        doc_vizs = self.results.viz[self.index]
+        res_viz = []
+        seen_span = set()
+        for span in self.results.spans[self.index]:
+            viz = []
+            span_id = (span[0], span[1])
+            text = doc.text[span[0]:span[1]]
+            if span_id not in seen_span:
+                viz.extend([viz for viz in doc_vizs if viz.span_start == span[0] and viz.span_end == span[1]])
+                seen_span.add(span_id)
+            hypothesis_template = 'Der Text beschreibt {}'
+            candidate_labels = ['Nationalsozialismus', 'Nazis', 'Rechtsextremismus']
+            s = self.clf(text, candidate_labels, hypothesis_template, multi_class=True)
+
+            if any(i > 0.95 for i in s['scores']):
+                for v in viz:
+                    v.GER = False
+
+            if self.config.debug:
+                pprint(hypothesis_template)
+                pprint(s)
+            res_viz.extend(viz)
+        self.results.viz[self.index] = res_viz
+
 
     def clf_demo(self, doc, debug=False):
         doc_vizs = self.results.viz[self.index]
@@ -179,12 +230,12 @@ class Clf(object):
             if span_id not in seen_span:
                 viz.extend([viz for viz in doc_vizs if viz.span_start == span[0] and viz.span_end == span[1]])
                 seen_span.add(span_id)
-                demo = ['Demokratie', 'Gewaltenteilung', 'Gerechtigkeit', 'Meinungsfreiheit']
+                demo = ['Demokratie', 'Gewaltenteilung', 'Gerechtigkeit', 'Meinungsfreiheit', 'Rechtsstaat']
                 for w in demo:
                     if w in text:
                         if not checked_history:
                             hypothesis_template = 'Der Text beschreibt {}'
-                            candidate_labels = ['Geschichte', 'Nationalsozialismus']
+                            candidate_labels = ['Geschichte', 'Nationalsozialismus', 'Nazis', 'Rechtsextremismus']
                             s = self.clf(text, candidate_labels, hypothesis_template, multi_class=True)
                             if debug:
                                 print(s)
@@ -207,6 +258,32 @@ class Clf(object):
                             if self.config.debug:
                                 pprint(hypothesis_template)
                                 pprint(s)
+            res_viz.extend(viz)
+        self.results.viz[self.index] = res_viz
+        
+    def clf_template(self, doc, debug=False):
+        doc_vizs = self.results.viz[self.index]
+        res_viz = []
+        seen_span = set()
+        for span in self.results.spans[self.index]:
+            viz = []
+            span_id = (span[0], span[1])
+            text = doc.text[span[0]:span[1]]
+            if span_id not in seen_span:
+                viz.extend([viz for viz in doc_vizs if viz.span_start == span[0] and viz.span_end == span[1]])
+                seen_span.add(span_id)
+            hypothesis_template = 'Der Text handelt von {}'
+            candidate_labels = ['Deutschland', 'Europa', 'Ausland']
+            s = self.clf(text, candidate_labels, hypothesis_template, multi_class=True)
+            
+#                 add here
+            if s['labels'][-1] == 'Deutschland':
+                for v in viz:
+                    v.GER = False
+
+            if self.config.debug:
+                pprint(hypothesis_template)
+                pprint(s)
             res_viz.extend(viz)
         self.results.viz[self.index] = res_viz
 

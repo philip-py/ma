@@ -85,7 +85,7 @@ class Results:
             'data/plenar_meta.json', orient='index')
 
     # score is computed here, not in functins above in CA
-    def compute_score(self, idf_weight=2.0, sentiment_weight=1.0, doclen_log=10, doclen_min=750, by_doclen=True, post=False):
+    def compute_score(self, by_doclen=True, idf_weight=2.0, sentiment_weight=1.0, doclen_log=10, doclen_min=750, post=True):
         scores = []
         labels = ['E', 'EA', 'V', 'VA']
         counts = []
@@ -132,10 +132,11 @@ class Results:
         self.scores = scores
         self.counts = counts
 
-    def compute_score_spans(self, by_doclen=True, idf_weight=1.5, sentiment_weight=1.5):
+#     def compute_score_spans(self, by_doclen=True, idf_weight=1.5, sentiment_weight=1.5, post=False):
+    def compute_score_spans(self, by_doclen=True, idf_weight=2.0, sentiment_weight=1.0, doclen_log=10, doclen_min=750, post=True):
         span_dict = {}
         self.compute_score(
-            by_doclen=by_doclen, idf_weight=idf_weight, sentiment_weight=sentiment_weight)
+            by_doclen=by_doclen, idf_weight=idf_weight, sentiment_weight=sentiment_weight, post=post)
         # {doc: [(span_start, span_end, score_sum)]}
         for i, doc in enumerate(self.viz):
             label = self.labels[i]
@@ -160,12 +161,13 @@ class Results:
             #     [dict(t) for t in {tuple(d.items()) for d in res["viz"]}],
             #     key=lambda i: i["start"],
             # )
-
-        self.compute_score(by_doclen=True, idf_weight=idf_weight,
-                           sentiment_weight=sentiment_weight)
+        self.compute_score(
+            by_doclen=by_doclen, idf_weight=idf_weight, sentiment_weight=sentiment_weight, post=post)
+#         self.compute_score(by_doclen=True, idf_weight=idf_weight,
+#                            sentiment_weight=sentiment_weight)
         self.spans_dict = span_dict
 
-    def create_spans(self):
+    def create_spans(self, post=False):
         span_dict = {}
         # {doc: [(span_start, span_end, score_sum)]}
         for i, doc in enumerate(self.viz):
@@ -181,8 +183,12 @@ class Results:
                     span_id = (span_start, span_end)
                     if span_id not in span_dict[label] and span_end not in [i[1] for i in span_dict[label].keys()]:
                         span_dict[label][span_id] = 0.0
-                    if span_id in span_dict[label] and span_end not in [i[1] for i in span_dict[label].keys()]:
-                        span_dict[label][span_id] += hit['score']
+                    if post:
+                        if span_id in span_dict[label] and span_end not in [i[1] for i in span_dict[label].keys()] and hit['SPAN_IS_POP']:
+                            span_dict[label][span_id] += hit['score']
+                    else:
+                        if span_id in span_dict[label] and span_end not in [i[1] for i in span_dict[label].keys()]:
+                            span_dict[label][span_id] += hit['score']
                     seen.add(hit['start'])
 
             # span_dict[label] = sorted(
@@ -209,14 +215,14 @@ class Results:
                         df.scores.apply(pd.Series)], axis=1, sort=False)
         self.df = df
 
-    def prepare(self, post=False):
+    def prepare(self, by_doclen=True, idf_weight=2.0, sentiment_weight=1.0, doclen_log=10, doclen_min=750, post=False):
         self.set_entities()
         self.create_spans()
         self.coding_pop()
-        self.compute_score(by_doclen=False, idf_weight=1.5,
-                           doclen_log=10, post=post)
-        self.compute_score_spans()
-        # self.create_spans()
+#         self.compute_score(by_doclen=False, idf_weight=1.5,
+#                            doclen_log=10, post=post)
+        self.compute_score_spans(post=post)
+#         self.create_spans(post=True)
         self.create_df()
 
     def render_online(text, row=None, viz=None, span=None, filter_by=['score'], pres=False):
@@ -353,15 +359,16 @@ class Results:
         if pres:
             viz_span_ = []
             for hit in viz:
-                paragraph = {}
-                # print(span)
-                # hit['start'] -= span[0]
-                # hit['end'] -= span[0]
-                paragraph['start'] = hit['span_start']
-                paragraph['end'] = hit['span_end']
-                # hit['label'] = f"{hit['coding']} | {hit['score']:.2f}"
-                if paragraph['start'] not in [i['start'] for i in viz_span_]:
-                    viz_span_.append(paragraph)
+                if hit['SPAN_IS_POP']:
+                    paragraph = {}
+                    # print(span)
+                    # hit['start'] -= span[0]
+                    # hit['end'] -= span[0]
+                    paragraph['start'] = hit['span_start']
+                    paragraph['end'] = hit['span_end']
+                    # hit['label'] = f"{hit['coding']} | {hit['score']:.2f}"
+                    if paragraph['start'] not in [i['start'] for i in viz_span_]:
+                        viz_span_.append(paragraph)
 
             for n, v in enumerate(viz_span_):
                 viz_span.append(
@@ -402,7 +409,7 @@ class Results:
                 {
                     "text": text[span[0]: span[1]],
                     "ents": viz_span,
-                    "title": 'user-input analysis'
+                    "title": row
                     # "title": f"{row['doc']} | {row.name_res} ({row['party']}) | {row['date'].strftime('%d/%m/%Y')}",
                     # 'title': 'text'
                 }

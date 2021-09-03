@@ -21,10 +21,11 @@ import pandas as pd
 import plotly.graph_objs as go
 import seaborn as sns
 import spacy
-from ana.src.d00_utils.helper import (filter_spans_overlap,
+from app.src.d00_utils.helper import (filter_spans_overlap,
                                       filter_spans_overlap_no_merge,
                                       flatten,
-                                      strip_non_ascii)
+                                      strip_non_ascii,
+                                      get_data_dir)
 from gensim import corpora, models, utils
 from gensim.models import KeyedVectors, Word2Vec, tfidfmodel
 from gensim.models.callbacks import CallbackAny2Vec
@@ -41,14 +42,14 @@ from spacy.util import filter_spans
 from spacy_sentiws import spaCySentiWS
 from tqdm import tqdm
 # from transformers import pipeline
-from ana import db
+from app import db
 import os
 from pydantic import BaseModel
 from typing import List, Optional, Union, Set
 from logzero import setup_logger
-from ana.models import Doc as Document
+from app.models import Doc as Document
 from pydantic import BaseModel
-from ana.src.d01_ana.analysis import AnalysisBase
+from app.src.d01_ana.analysis import AnalysisBase
 
 
 class ConfigDiscourse(BaseModel):
@@ -82,17 +83,17 @@ class AnalysisDiscourse(AnalysisBase):
         niter = self.config.niter
 
         print('Number of documents: {}'.format(len(self.doc_labels)))
-        sentences = MyCorpus(self.doc_labels)
+        sentences = MyCorpus(self.nlp, self.doc_labels)
         print(f'Beginning Discourse Analysis with parameters: \n{self.config.dict()}')
 
         # model params
         model = Word2Vec(
-        alpha=self.alpha, vector_size=100, epochs=250, seed=42, workers=12, hashfxn=hash, sorted_vocab=1, sg=1, hs=1, negative=0, sample=1e-2, min_count=5)
+        alpha=self.alpha, vector_size=100, epochs=250, seed=42, workers=8, hashfxn=hash, sorted_vocab=1, sg=1, hs=1, negative=0, sample=1e-4, min_count=40)
 #         alpha=0.0025, min_alpha=0.00001, vector_size=100, epochs=500, seed=42, workers=8, hashfxn=hash, sorted_vocab=1, sg=1, hs=1, negative=0, sample=1e-4, min_count=5)
         model.build_vocab(sentences)
 
 #         intersect
-        pre = KeyedVectors.load('embeddings/wiki100.kv')
+        pre = KeyedVectors.load(f'{get_data_dir()}/emb/wiki100.kv')
         res = intersect(pre, model)
         del pre
 
@@ -181,11 +182,12 @@ class AnalysisDiscourse(AnalysisBase):
 class MyCorpus(object):
     """An interator that yields sentences (lists of str)."""
 
-    def __init__(self, sample):
+    def __init__(self, nlp, sample):
+        self.nlp = nlp
         self.docs = sample
 
     def __iter__(self):
-        for sent in sentences_gen(self.docs):
+        for sent in sentences_gen(self.nlp, self.docs):
             yield sent
 
 
@@ -308,13 +310,13 @@ def load_models(dir, party, iter):
     all_models = []
     for i in range(iter+1):
         all_models.append(Word2Vec.load(
-            f'res/{dir}/emb/emb_{party}_{i}.model'))
+            f'app/data/res/w2v/{dir}/emb/emb_{party}_{i}.model'))
     return all_models
 
 
-def sentences_gen(labels):
+def sentences_gen(nlp, labels):
     lemmatizer = GermaLemma()
-    nlp = spacy.load("de_core_news_lg")
+#     nlp = spacy.load("de_core_news_lg")
 
     def lemma_getter(token):
         # if " " in token.text:
@@ -324,19 +326,22 @@ def sentences_gen(labels):
         except:
             return token.lemma_.lower()
 
+    Token.set_extension('lemma', getter=lemma_getter, force=True)
+
     for label in labels:
         # doc = nlp(gendocs(label))
         doc = nlp(label.text)
         for i, sent in enumerate(doc.sents):
             res = []
             for j, token in enumerate(sent):
-                Token.set_extension('lemma', getter=lemma_getter, force=True)
                 if token.is_alpha and not token.is_punct and not token.is_digit and not token.is_space:
-                    tok = token._.lemma.lower()
-                    tok = tok.replace('.', '')
-                    res.append(tok)
+                    token_res = token._.lemma.lower()
+                    res.append(token_res)
             res = [word for word in res if not word in STOP_WORDS]
-            yield res
+            if len(res) <=1:
+                pass
+            else:
+                yield res
 
 def doc_gen(labels):
     lemmatizer = GermaLemma()
@@ -362,3 +367,29 @@ def doc_gen(labels):
                 res.append(tok)
         res = [word for word in res if not word in STOP_WORDS]
         yield res
+
+# def sentences_gen(labels):
+#     lemmatizer = GermaLemma()
+#     nlp = spacy.load("de_core_news_lg")
+
+#     def lemma_getter(token):
+#         # if " " in token.text:
+#         #     return token.lemma_.lower()
+#         try:
+#             return lemmatizer.find_lemma(token.text, token.tag_).lower()
+#         except:
+#             return token.lemma_.lower()
+
+#     for label in labels:
+#         # doc = nlp(gendocs(label))
+#         doc = nlp(label.text)
+#         for i, sent in enumerate(doc.sents):
+#             res = []
+#             for j, token in enumerate(sent):
+#                 Token.set_extension('lemma', getter=lemma_getter, force=True)
+#                 if token.is_alpha and not token.is_punct and not token.is_digit and not token.is_space:
+#                     tok = token._.lemma.lower()
+#                     tok = tok.replace('.', '')
+#                     res.append(tok)
+#             res = [word for word in res if not word in STOP_WORDS]
+#             yield res

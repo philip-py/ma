@@ -130,10 +130,10 @@ class Analysis(AnalysisBase):
             self.nlp.add_pipe(sentiws, last=True)
             self.nlp.add_pipe(sentiment, last=True)
         if 'entity' in pipe:
-            entity = EntityRecognizer(self.nlp)
+            entity = EntityRecognizer(self.nlp, self.config)
             self.nlp.add_pipe(entity, last=True)
         if 'res' in pipe:
-            res = ContentAnalysis(self.nlp)
+            res = ContentAnalysis(self.nlp, self.config, window_size=25)
             self.nlp.add_pipe(res, last=True)
         if 'spans' in pipe:
             spans = Spans(self.nlp)
